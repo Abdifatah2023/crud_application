@@ -11,6 +11,10 @@ class Task(BaseModel):
     done: bool
 
 
+class TaskCreate(BaseModel):
+    title: str = ""
+
+
 tasks = [
     Task(id=1, title="Buy milk", done=False),
     Task(id=2, title="Walk the dog", done=False),
@@ -41,3 +45,13 @@ def get_task(task_id: int):
     return JSONResponse(
         status_code=404, content={"error": f"Task {task_id} not found"}
     )
+
+
+@app.post("/tasks", status_code=201)
+def create_task(body: TaskCreate):
+    if not body.title.strip():
+        return JSONResponse(status_code=400, content={"error": "title is required"})
+    next_id = max((task.id for task in tasks), default=0) + 1
+    task = Task(id=next_id, title=body.title, done=False)
+    tasks.append(task)
+    return task
