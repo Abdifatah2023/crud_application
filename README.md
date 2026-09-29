@@ -1,29 +1,52 @@
 # Task API
 
-A small to-do list CRUD API built with FastAPI. Data is stored in memory — it resets whenever the server restarts (there's no database yet).
+A small to-do list CRUD API built with FastAPI. Tasks are stored in a SQLite database (`tasks.db`), so they survive server restarts.
 
 ## Install & run
 
-```
+Requires Python 3.10+.
+
+```powershell
 python -m venv .venv
 .venv\Scripts\activate
-pip install fastapi "uvicorn[standard]"
+pip install -r requirements.txt
+```
+
+Then start the server with one command:
+
+```powershell
 uvicorn main:app --port 8000
 ```
 
 The API is now running at `http://localhost:8000`. Interactive docs (Swagger UI) are at `http://localhost:8000/docs`.
 
+## Why SQLite
+
+- **Single file**: the whole database is `tasks.db`, with no separate database server to install or run.
+- **Zero setup**: `sqlite3` ships with Python, so there's nothing extra to install.
+- **Survives restarts**: tasks are written to disk, unlike the in-memory list this API used before.
+
+## The database file
+
+- `tasks.db` lives next to `main.py` and is **created automatically** the first time the server starts.
+- On startup the app creates the `tasks` table (`id`, `title`, `done`) if it's missing, and seeds three example tasks **only when the table is empty**, so restarts never duplicate them.
+- `tasks.db` is git-ignored, so every fresh clone starts with just the three examples. Delete it at any time to reset.
+
+![tasks.db open in DB Browser next to GET /tasks returning the same three tasks](screenshots/02-select-all.png)
+
 ## Endpoints
 
-| Method | Path           | Description                          | Success | Errors           |
-|--------|----------------|--------------------------------------|---------|-------------------|
-| GET    | `/`            | API info                             | 200     | —                 |
-| GET    | `/health`      | Health check                         | 200     | —                 |
-| GET    | `/tasks`       | List all tasks                       | 200     | —                 |
-| GET    | `/tasks/{id}`  | Get one task                         | 200     | 404 unknown id    |
-| POST   | `/tasks`       | Create a task (`{"title": "..."}`)   | 201     | 400 missing/empty title |
-| PUT    | `/tasks/{id}`  | Update a task's title and/or done    | 200     | 404 unknown id, 400 empty/invalid body |
-| DELETE | `/tasks/{id}`  | Delete a task                        | 204     | 404 unknown id    |
+| Method | Path          | Description                        | Success | Errors                                  |
+|--------|---------------|------------------------------------|---------|-----------------------------------------|
+| GET    | `/`           | API info                           | 200     | —                                       |
+| GET    | `/health`     | Health check                       | 200     | —                                       |
+| GET    | `/tasks`      | List all tasks                     | 200     | —                                       |
+| GET    | `/tasks/{id}` | Get one task                       | 200     | 404 unknown id                          |
+| POST   | `/tasks`      | Create a task (`{"title": "..."}`) | 201     | 400 missing/empty title                 |
+| PUT    | `/tasks/{id}` | Update a task's title and/or done  | 200     | 404 unknown id, 400 empty body or title |
+| DELETE | `/tasks/{id}` | Delete a task                      | 204     | 404 unknown id                          |
+
+Values of the wrong type (e.g. `"done": "yes"`) are rejected by FastAPI with 422.
 
 ## Example request
 
@@ -55,4 +78,4 @@ After marking every task done with `UPDATE tasks SET done=1;`, this query delete
 
 ## Swagger UI
 
-![Swagger UI showing all task endpoints](docs/swagger-screenshot.png)
+![Swagger UI showing all task endpoints](screenshots/07-swagger-endpoints.png)
