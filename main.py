@@ -8,7 +8,7 @@ from pydantic import BaseModel
 
 app = FastAPI(
     title="Task API",
-    description="A small in-memory to-do list API (no database yet — data resets on restart).",
+    description="A small to-do list API backed by SQLite (tasks.db) — data survives restarts.",
     version="1.0",
 )
 
@@ -63,13 +63,6 @@ def init_db():
 
 
 init_db()
-
-
-tasks = [
-    Task(id=1, title="Buy milk", done=False),
-    Task(id=2, title="Walk the dog", done=False),
-    Task(id=3, title="Read a book", done=True),
-]
 
 
 @app.get("/", summary="API info", description="Describes this API and its endpoints.")
@@ -135,16 +128,25 @@ def update_task(task_id: int, body: TaskUpdate):
         )
     if body.title is not None and not body.title.strip():
         return JSONResponse(status_code=400, content={"error": "title cannot be empty"})
-    for task in tasks:
-        if task.id == task_id:
-            if body.title is not None:
-                task.title = body.title
-            if body.done is not None:
-                task.done = body.done
-            return task
-    return JSONResponse(
-        status_code=404, content={"error": f"Task {task_id} not found"}
-    )
+    with closing(get_db()) as conn:
+        row = conn.execute(
+            "SELECT * FROM tasks WHERE id = ?", (task_id,)
+        ).fetchone()
+        if row is None:
+            return JSONResponse(
+                status_code=404, content={"error": f"Task {task_id} not found"}
+            )
+        task = Task(**dict(row))
+        if body.title is not None:
+            task.title = body.title
+        if body.done is not None:
+            task.done = body.done
+        conn.execute(
+            "UPDATE tasks SET title = ?, done = ? WHERE id = ?",
+            (task.title, int(task.done), task.id),
+        )
+        conn.commit()
+    return task
 
 
 @app.delete(
@@ -154,10 +156,11 @@ def update_task(task_id: int, body: TaskUpdate):
     description="Removes a task. Returns 204 with no body, or 404 if unknown id.",
 )
 def delete_task(task_id: int):
-    for i, task in enumerate(tasks):
-        if task.id == task_id:
-            tasks.pop(i)
-            return None
-    return JSONResponse(
-        status_code=404, content={"error": f"Task {task_id} not found"}
-    )
+    with closing(get_db()) as conn:
+        cursor = conn.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
+        conn.commit()
+    if cursor.rowcount == 0:
+        return JSONResponse(
+            status_code=404, content={"error": f"Task {task_id} not found"}
+        )
+    return None
