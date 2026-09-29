@@ -115,10 +115,12 @@ def get_task(task_id: int):
 def create_task(body: TaskCreate):
     if not body.title.strip():
         return JSONResponse(status_code=400, content={"error": "title is required"})
-    next_id = max((task.id for task in tasks), default=0) + 1
-    task = Task(id=next_id, title=body.title, done=False)
-    tasks.append(task)
-    return task
+    with closing(get_db()) as conn:
+        cursor = conn.execute(
+            "INSERT INTO tasks (title, done) VALUES (?, ?)", (body.title, 0)
+        )
+        conn.commit()
+    return Task(id=cursor.lastrowid, title=body.title, done=False)
 
 
 @app.put(
