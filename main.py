@@ -1,3 +1,6 @@
+import sqlite3
+from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -22,6 +25,43 @@ class TaskCreate(BaseModel):
 class TaskUpdate(BaseModel):
     title: str | None = None
     done: bool | None = None
+
+
+DB_PATH = Path(__file__).parent / "tasks.db"
+
+SEED_TASKS = [
+    ("Buy milk", 0),
+    ("Walk the dog", 0),
+    ("Read a book", 1),
+]
+
+
+def get_db():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def init_db():
+    conn = get_db()
+    try:
+        with conn:
+            conn.execute(
+                "CREATE TABLE IF NOT EXISTS tasks ("
+                "id INTEGER PRIMARY KEY, "
+                "title TEXT NOT NULL, "
+                "done INTEGER NOT NULL DEFAULT 0)"
+            )
+            count = conn.execute("SELECT COUNT(*) FROM tasks").fetchone()[0]
+            if count == 0:
+                conn.executemany(
+                    "INSERT INTO tasks (title, done) VALUES (?, ?)", SEED_TASKS
+                )
+    finally:
+        conn.close()
+
+
+init_db()
 
 
 tasks = [
