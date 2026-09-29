@@ -1,4 +1,5 @@
 import sqlite3
+from contextlib import closing
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -81,9 +82,11 @@ def health():
     return {"status": "ok"}
 
 
-@app.get("/tasks", summary="List tasks", description="Returns every task in memory.")
+@app.get("/tasks", summary="List tasks", description="Returns every task in the database.")
 def list_tasks():
-    return tasks
+    with closing(get_db()) as conn:
+        rows = conn.execute("SELECT * FROM tasks").fetchall()
+    return [Task(**dict(row)) for row in rows]
 
 
 @app.get(
@@ -92,12 +95,15 @@ def list_tasks():
     description="Returns a single task by id, or 404 if it doesn't exist.",
 )
 def get_task(task_id: int):
-    for task in tasks:
-        if task.id == task_id:
-            return task
-    return JSONResponse(
-        status_code=404, content={"error": f"Task {task_id} not found"}
-    )
+    with closing(get_db()) as conn:
+        row = conn.execute(
+            "SELECT * FROM tasks WHERE id = ?", (task_id,)
+        ).fetchone()
+    if row is None:
+        return JSONResponse(
+            status_code=404, content={"error": f"Task {task_id} not found"}
+        )
+    return Task(**dict(row))
 
 
 @app.post(
