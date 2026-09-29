@@ -41,6 +41,18 @@ content-type: application/json
 {"id":4,"title":"Buy milk","done":false}
 ```
 
+## Exploring the database
+
+I opened `tasks.db` in DB Browser for SQLite and ran SQL by hand while the API was running.
+
+```sql
+DELETE FROM tasks WHERE done=1;
+```
+
+After marking every task done with `UPDATE tasks SET done=1;`, this query deleted all 3 rows ("3 rows affected"), and `GET /tasks` immediately returned `[]` with no server restart, because the API and DB Browser read the same file.
+
+![DB Browser running the DELETE query next to GET /tasks returning an empty list](screenshots/06-delete-done.png)
+
 ## Swagger UI
 
 ![Swagger UI showing all task endpoints](docs/swagger-screenshot.png)
