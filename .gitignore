@@ -4,3 +4,4 @@ __pycache__/
 tasks.db
 /docs
 CLAUDE.md
+.env

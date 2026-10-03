@@ -79,3 +79,11 @@ After marking every task done with `UPDATE tasks SET done=1;`, this query delete
 ## Swagger UI
 
 ![Swagger UI showing all task endpoints](screenshots/07-swagger-endpoints.png)
+
+## Docker run command
+
+```
+
+ docker run --name taskdb -e POSTGRES_PASSWORD=dev -e POSTGRES_DB=tasks -p 5432:5432 -v taskdata:/var/lib/postgresql/data -d postgres:17
+
+ ```
