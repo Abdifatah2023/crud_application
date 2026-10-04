@@ -57,3 +57,55 @@ def get_task(task_id: int):
                     status_code=404, content={"error": f"Task {task_id} not found"}
                 )
     return dict(row)
+
+
+def create_task(title: str):
+    if not title.strip():
+        return JSONResponse(status_code=400, content={"error": "title is required"})
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO tasks (title, done) VALUES (%s, %s) RETURNING id", (title, False)
+            )
+            task_id = cur.fetchone()["id"]
+            conn.commit()
+    return {"id": task_id, "title": title, "done": False}
+
+
+def update_task(task_id: int, title: str = None, done: bool = None):
+    if title is None and done is None:
+        return JSONResponse(
+            status_code=400, content={"error": "title or done is required"}
+        )
+    if title is not None and not title.strip():
+        return JSONResponse(status_code=400, content={"error": "title cannot be empty"})
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT * FROM tasks WHERE id = %s", (task_id,))
+            row = cur.fetchone()
+            if row is None:
+                return JSONResponse(
+                    status_code=404, content={"error": f"Task {task_id} not found"}
+                )
+            task = dict(row)
+            if title is not None:
+                task["title"] = title
+            if done is not None:
+                task["done"] = done
+            cur.execute(
+                "UPDATE tasks SET title = %s, done = %s WHERE id = %s",
+                (task["title"], task["done"], task_id),
+            )
+            conn.commit()
+    return task
+
+def delete_task(task_id: int):
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM tasks WHERE id = %s", (task_id,))
+            conn.commit()
+            if cur.rowcount == 0:
+                return JSONResponse(
+                    status_code=404, content={"error": f"Task {task_id} not found"}
+                )
+    return 204

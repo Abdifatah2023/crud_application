@@ -61,14 +61,7 @@ def get_task(task_id: int):
     description="Creates a new task from a title. Returns 400 if title is missing or empty.",
 )
 def create_task(body: TaskCreate):
-    if not body.title.strip():
-        return JSONResponse(status_code=400, content={"error": "title is required"})
-    with closing(get_db()) as conn:
-        cursor = conn.execute(
-            "INSERT INTO tasks (title, done) VALUES (?, ?)", (body.title, 0)
-        )
-        conn.commit()
-    return Task(id=cursor.lastrowid, title=body.title, done=False)
+    return repository.create_task(body.title)
 
 
 @app.put(
@@ -77,31 +70,7 @@ def create_task(body: TaskCreate):
     description="Replaces a task's title and/or done state. 404 if unknown id, 400 if the body is empty or invalid.",
 )
 def update_task(task_id: int, body: TaskUpdate):
-    if body.title is None and body.done is None:
-        return JSONResponse(
-            status_code=400, content={"error": "title or done is required"}
-        )
-    if body.title is not None and not body.title.strip():
-        return JSONResponse(status_code=400, content={"error": "title cannot be empty"})
-    with closing(get_db()) as conn:
-        row = conn.execute(
-            "SELECT * FROM tasks WHERE id = ?", (task_id,)
-        ).fetchone()
-        if row is None:
-            return JSONResponse(
-                status_code=404, content={"error": f"Task {task_id} not found"}
-            )
-        task = Task(**dict(row))
-        if body.title is not None:
-            task.title = body.title
-        if body.done is not None:
-            task.done = body.done
-        conn.execute(
-            "UPDATE tasks SET title = ?, done = ? WHERE id = ?",
-            (task.title, int(task.done), task.id),
-        )
-        conn.commit()
-    return task
+    return repository.update_task(task_id, body.title, body.done)
 
 
 @app.delete(
@@ -111,11 +80,4 @@ def update_task(task_id: int, body: TaskUpdate):
     description="Removes a task. Returns 204 with no body, or 404 if unknown id.",
 )
 def delete_task(task_id: int):
-    with closing(get_db()) as conn:
-        cursor = conn.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
-        conn.commit()
-    if cursor.rowcount == 0:
-        return JSONResponse(
-            status_code=404, content={"error": f"Task {task_id} not found"}
-        )
-    return None
+    return repository.delete_task(task_id)
