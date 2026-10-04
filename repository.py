@@ -1,6 +1,7 @@
 from psycopg.rows import dict_row #plays the role sqlite3.Row did
 import psycopg
 import os
+from fastapi.responses import JSONResponse
 
 
 from dotenv import load_dotenv
@@ -39,4 +40,20 @@ def init_db():
         conn.close()
 
   
+def list_tasks():
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT * FROM tasks ORDER BY id")
+            rows = cur.fetchall()
+    return [dict(row) for row in rows] 
 
+def get_task(task_id: int):
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT * FROM tasks WHERE id = %s", (task_id,))
+            row = cur.fetchone()
+    if row is None:
+         return JSONResponse(
+                    status_code=404, content={"error": f"Task {task_id} not found"}
+                )
+    return dict(row)

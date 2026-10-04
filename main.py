@@ -3,9 +3,7 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from repository import get_db, init_db
-
-init_db()
+import repository
 
 
 app = FastAPI(
@@ -30,6 +28,7 @@ class TaskUpdate(BaseModel):
     done: bool | None = None
 
 
+repository.init_db()
 
 @app.get("/", summary="API info", description="Describes this API and its endpoints.")
 def root():
@@ -43,9 +42,7 @@ def health():
 
 @app.get("/tasks", summary="List tasks", description="Returns every task in the database.")
 def list_tasks():
-    with closing(get_db()) as conn:
-        rows = conn.execute("SELECT * FROM tasks").fetchall()
-    return [Task(**dict(row)) for row in rows]
+    return repository.list_tasks()
 
 
 @app.get(
@@ -54,15 +51,7 @@ def list_tasks():
     description="Returns a single task by id, or 404 if it doesn't exist.",
 )
 def get_task(task_id: int):
-    with closing(get_db()) as conn:
-        row = conn.execute(
-            "SELECT * FROM tasks WHERE id = ?", (task_id,)
-        ).fetchone()
-    if row is None:
-        return JSONResponse(
-            status_code=404, content={"error": f"Task {task_id} not found"}
-        )
-    return Task(**dict(row))
+    return repository.get_task(task_id)
 
 
 @app.post(
