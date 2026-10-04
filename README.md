@@ -1,38 +1,11 @@
 # Task API
 
-A small to-do list CRUD API built with FastAPI. Tasks are stored in a SQLite database (`tasks.db`), so they survive server restarts.
+A small to-do list CRUD API built with FastAPI. Tasks are stored in a Postgres database using Docker container, and they survive server restarts.
 
-## Install & run
-
-Requires Python 3.10+.
-
+## The one-command run
 ```powershell
-python -m venv .venv
-.venv\Scripts\activate
-pip install -r requirements.txt
+Copy-Item .env.example .env then docker compose up
 ```
-
-Then start the server with one command:
-
-```powershell
-uvicorn main:app --port 8000
-```
-
-The API is now running at `http://localhost:8000`. Interactive docs (Swagger UI) are at `http://localhost:8000/docs`.
-
-## Why SQLite
-
-- **Single file**: the whole database is `tasks.db`, with no separate database server to install or run.
-- **Zero setup**: `sqlite3` ships with Python, so there's nothing extra to install.
-- **Survives restarts**: tasks are written to disk, unlike the in-memory list this API used before.
-
-## The database file
-
-- `tasks.db` lives next to `main.py` and is **created automatically** the first time the server starts.
-- On startup the app creates the `tasks` table (`id`, `title`, `done`) if it's missing, and seeds three example tasks **only when the table is empty**, so restarts never duplicate them.
-- `tasks.db` is git-ignored, so every fresh clone starts with just the three examples. Delete it at any time to reset.
-
-![tasks.db open in DB Browser next to GET /tasks returning the same three tasks](screenshots/02-select-all.png)
 
 ## Endpoints
 
@@ -48,33 +21,25 @@ The API is now running at `http://localhost:8000`. Interactive docs (Swagger UI)
 
 Values of the wrong type (e.g. `"done": "yes"`) are rejected by FastAPI with 422.
 
+
 ## Example request
-
-```
-curl -i -X POST http://localhost:8000/tasks -H "Content-Type: application/json" -d '{"title":"Buy milk"}'
-```
-
-```
-HTTP/1.1 201 Created
-date: Fri, 11 Sep 2026 04:35:17 GMT
-server: uvicorn
-content-length: 40
-content-type: application/json
-
-{"id":4,"title":"Buy milk","done":false}
+```powershell
+Invoke-RestMethod -Uri "http://localhost:8000/tasks" -Method Post -Headers @{"Content-Type"="application/json"} -Body '{"title":"Do the dishes"}'
 ```
 
-## Exploring the database
-
-I opened `tasks.db` in DB Browser for SQLite and ran SQL by hand while the API was running.
-
-```sql
-DELETE FROM tasks WHERE done=1;
+```
+id title          done
+-- -----          ----
+4  Do the dishes  False
 ```
 
-After marking every task done with `UPDATE tasks SET done=1;`, this query deleted all 3 rows ("3 rows affected"), and `GET /tasks` immediately returned `[]` with no server restart, because the API and DB Browser read the same file.
+## .env variables
+```
+POSTGRES_PASSWORD=yourpassword
+POSTGRES_DB=tasks
+DATABASE_URL=postgresql://postgres:yourpassword@localhost:5432/tasks
+```
 
-![DB Browser running the DELETE query next to GET /tasks returning an empty list](screenshots/06-delete-done.png)
 
 ## Swagger UI
 
@@ -82,8 +47,11 @@ After marking every task done with `UPDATE tasks SET done=1;`, this query delete
 
 ## Docker run command
 
-```
+```powershell
+ docker run --name taskdb -e POSTGRES_PASSWORD=yourpassword -e POSTGRES_DB=tasks -p 5432:5432 -v taskdata:/var/lib/postgresql/data -d postgres:17
+ ```
 
- docker run --name taskdb -e POSTGRES_PASSWORD=dev -e POSTGRES_DB=tasks -p 5432:5432 -v taskdata:/var/lib/postgresql/data -d postgres:17
-
+ ## run this to reset database
+ ```powershell
+ docker compose down -v
  ```
