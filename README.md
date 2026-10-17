@@ -2,6 +2,11 @@
 
 A small to-do list CRUD API built with FastAPI. Tasks are stored in a Postgres database using Docker container, and they survive server restarts.
 
+## Start Postgres
+```powershell
+docker run --name taskdb -e POSTGRES_PASSWORD=dev -e POSTGRES_DB=tasks -p 5432:5432 -v taskdata:/var/lib/postgresql/data -d postgres:17
+```
+
 ## The one-command run
 ```powershell
 Copy-Item .env.example .env then docker compose up
