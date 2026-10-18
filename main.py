@@ -1,9 +1,10 @@
-from fastapi import FastAPI, Header
+from fastapi import Depends, FastAPI, Request, Response
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 
 import repository
+from auth import Unauthorized, get_bearer_token, get_current_user
 
 
 app = FastAPI(
@@ -34,14 +35,9 @@ class UserSignup(BaseModel):
 repository.init_db()
 
 
-def extract_bearer_token(authorization: str | None) -> str | None:
-    if not authorization:
-        return None
-    scheme, _, token = authorization.partition(" ")
-    token = token.strip()
-    if scheme.lower() != "bearer" or not token:
-        return None
-    return token
+@app.exception_handler(Unauthorized)
+def unauthorized_handler(request: Request, exc: Unauthorized):
+    return JSONResponse(status_code=401, content={"error": exc.message})
 
 
 @app.get("/", summary="API info", description="Describes this API and its endpoints.")
@@ -130,11 +126,30 @@ def public_info():
     description="Requires 'Authorization: Bearer <token>'. Verifies the token with Supabase and returns the user's id, "
     "email and account-created date. Returns 401 if the token is missing, malformed, invalid or expired.",
 )
-def protected_profile(authorization: str | None = Header(default=None)):
-    token = extract_bearer_token(authorization)
-    if token is None:
-        return JSONResponse(status_code=401, content={"error": "Access token required"})
-    user = repository.get_user_from_token(token)
-    if user is None:
-        return JSONResponse(status_code=401, content={"error": "Invalid or expired token"})
+def protected_profile(user=Depends(get_current_user)):
     return {"id": user.id, "email": user.email, "created_at": user.created_at}
+
+
+@app.get(
+    "/protected/dashboard",
+    summary="Protected dashboard",
+    description="Requires 'Authorization: Bearer <token>'. Greets the logged-in user. "
+    "Returns 401 if the token is missing, malformed, invalid or expired.",
+)
+def protected_dashboard(user=Depends(get_current_user)):
+    return {"message": f"Welcome to your dashboard, {user.email}!"}
+
+
+@app.post(
+    "/auth/logout",
+    status_code=204,
+    dependencies=[Depends(get_current_user)],
+    summary="Log out",
+    description="Requires 'Authorization: Bearer <token>'. Ends the user's Supabase session and returns 204 "
+    "with no body. Returns 401 if the token is missing, malformed, invalid or expired.",
+)
+def user_logout(token: str = Depends(get_bearer_token)):
+    error = repository.logout_user(token)
+    if error is not None:
+        return error
+    return Response(status_code=204)

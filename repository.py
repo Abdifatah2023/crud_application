@@ -103,6 +103,16 @@ def get_user_from_token(token: str):
     return res.user
 
 
+def logout_user(token: str):
+    # admin.sign_out(token) ends the session the token belongs to. The plain auth.sign_out() would act on
+    # this server's shared client session (whoever logged in last), not on the caller.
+    try:
+        supabase.auth.admin.sign_out(token)
+    except AuthError:
+        return JSONResponse(status_code=401, content={"error": "Invalid or expired token"})
+    return None
+
+
 def update_task(task_id: int, title: str = None, done: bool = None):
     if title is None and done is None:
         return JSONResponse(
