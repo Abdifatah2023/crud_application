@@ -1,6 +1,16 @@
-from fastapi import Depends, Header
+from fastapi import Depends
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 import repository
+
+
+# Registers the "Bearer" security scheme in OpenAPI, which gives Swagger UI its Authorize padlock.
+# auto_error=False so a missing token reaches our own 401 {"error": ...} instead of FastAPI's default.
+bearer_scheme = HTTPBearer(
+    auto_error=False,
+    bearerFormat="JWT",
+    description="Paste the access_token returned by POST /auth/login.",
+)
 
 
 class Unauthorized(Exception):
@@ -10,19 +20,12 @@ class Unauthorized(Exception):
         self.message = message
 
 
-def extract_bearer_token(authorization: str | None) -> str | None:
-    if not authorization:
-        return None
-    scheme, _, token = authorization.partition(" ")
-    token = token.strip()
-    if scheme.lower() != "bearer" or not token:
-        return None
-    return token
-
-
-def get_bearer_token(authorization: str | None = Header(default=None)) -> str:
-    token = extract_bearer_token(authorization)
-    if token is None:
+def get_bearer_token(
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+) -> str:
+    # HTTPBearer returns None when the header is missing, isn't "Bearer ...", or has no token.
+    token = credentials.credentials.strip() if credentials else ""
+    if not token:
         raise Unauthorized("Access token required")
     return token
 
