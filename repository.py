@@ -5,7 +5,7 @@ from fastapi.responses import JSONResponse
 
 from dotenv import load_dotenv
 from supabase_client import supabase
-from supabase import AuthApiError
+from supabase import AuthApiError, AuthError
 
 
 
@@ -90,6 +90,18 @@ def login_user(email: str, password: str):
     except AuthApiError:
         return JSONResponse(status_code=401, content={"error": "Invalid login credentials"})
     return JSONResponse(status_code=200, content={"access_token": res.session.access_token, "refresh_token": res.session.refresh_token})
+
+
+def get_user_from_token(token: str):
+    # get_user() makes a network call to Supabase, which checks the token's signature and expiry.
+    try:
+        res = supabase.auth.get_user(token)
+    except AuthError:
+        return None
+    if res is None or res.user is None:
+        return None
+    return res.user
+
 
 def update_task(task_id: int, title: str = None, done: bool = None):
     if title is None and done is None:

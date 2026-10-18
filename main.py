@@ -1,4 +1,3 @@
-from contextlib import closing
 from fastapi import FastAPI, Header
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -9,7 +8,7 @@ import repository
 
 app = FastAPI(
     title="Task API",
-    description="A small to-do list API backed by SQLite (tasks.db) — data survives restarts.",
+    description="A small to-do list API. Tasks live in Postgres; user accounts and JWTs are managed by Supabase Auth.",
     version="1.0",
 )
 
@@ -128,12 +127,14 @@ def public_info():
 @app.get(
     "/protected/profile",
     summary="Protected profile",
-    description="Requires 'Authorization: Bearer <token>'. Returns 401 if the token is missing or malformed.",
+    description="Requires 'Authorization: Bearer <token>'. Verifies the token with Supabase and returns the user's id, "
+    "email and account-created date. Returns 401 if the token is missing, malformed, invalid or expired.",
 )
 def protected_profile(authorization: str | None = Header(default=None)):
     token = extract_bearer_token(authorization)
     if token is None:
         return JSONResponse(status_code=401, content={"error": "Access token required"})
-
-    return {"message": "access token received (not verified yet)."}
-    
+    user = repository.get_user_from_token(token)
+    if user is None:
+        return JSONResponse(status_code=401, content={"error": "Invalid or expired token"})
+    return {"id": user.id, "email": user.email, "created_at": user.created_at}
