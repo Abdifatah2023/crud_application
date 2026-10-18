@@ -3,8 +3,10 @@ import psycopg
 import os
 from fastapi.responses import JSONResponse
 
-
 from dotenv import load_dotenv
+from supabase_client import supabase
+from supabase import AuthApiError
+
 
 
 load_dotenv()
@@ -70,6 +72,25 @@ def create_task(title: str):
     return {"id": task_id, "title": title, "done": False}
 
 
+def create_user(email: str, password: str):
+    if not email.strip() or not password.strip():
+        return JSONResponse(status_code=400, content={"error": "email and password are required"})
+    try:
+        res = supabase.auth.sign_up({"email": email, "password": password})
+    except AuthApiError:
+        return JSONResponse(status_code=400, content={"error": "User already exists"})
+    return res.user
+
+
+def login_user(email: str, password: str):
+    if not email.strip() or not password.strip():
+        return JSONResponse(status_code=400, content={"error": "email and password are required"})
+    try:
+        res = supabase.auth.sign_in_with_password({"email": email, "password": password})
+    except AuthApiError:
+        return JSONResponse(status_code=401, content={"error": "Invalid login credentials"})
+    return JSONResponse(status_code=200, content={"access_token": res.session.access_token, "refresh_token": res.session.refresh_token})
+
 def update_task(task_id: int, title: str = None, done: bool = None):
     if title is None and done is None:
         return JSONResponse(
@@ -107,3 +128,4 @@ def delete_task(task_id: int):
                     status_code=404, content={"error": f"Task {task_id} not found"}
                 )
     return 204
+
