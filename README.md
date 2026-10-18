@@ -1,18 +1,58 @@
 # Task API
 
-A small to-do list CRUD API built with FastAPI. Tasks are stored in a Postgres database using Docker container, and they survive server restarts.
+A small FastAPI to-do API with user authentication. **Supabase Auth** is the Identity Provider: it stores the accounts, hashes the passwords and signs the JSON Web Tokens (JWTs). This API forwards sign-up/log-in requests to Supabase, then verifies the bearer token on every protected route before letting the request through. Tasks are stored in Postgres, and the whole stack runs with Docker Compose.
 
-## Start Postgres
+## How auth works
+
+1. The client signs up or logs in through `POST /auth/signup` / `POST /auth/login`. The API forwards the email and password to Supabase and never stores them.
+2. Login returns Supabase's `access_token` (a JWT, valid for one hour) and `refresh_token`.
+3. The client calls a protected route with `Authorization: Bearer <access_token>`.
+4. A reusable FastAPI dependency (`get_current_user` in `auth.py`) asks Supabase whether the token is real (`supabase.auth.get_user(token)`). If it is, the route runs with the user injected. If it's missing, malformed, tampered with or expired, the route answers `401`.
+
+## Setup
+
+**Prerequisites:** Docker Desktop and a free [Supabase](https://supabase.com) project.
+
+1. In the Supabase dashboard, open **Project Settings → API** and copy the **Project URL** and the **anon** key. Never use the `service_role` key here; it bypasses all security.
+2. For this practice project, open **Authentication → Sign In / Providers → Email** and turn **Confirm email** off so a new account can log in immediately.
+3. Copy the example env file and fill in your values:
+
 ```powershell
-docker run --name taskdb -e POSTGRES_PASSWORD=dev -e POSTGRES_DB=tasks -p 5432:5432 -v taskdata:/var/lib/postgresql/data -d postgres:17
+Copy-Item .env.example .env
 ```
 
-## The one-command run
+| Variable            | What it is                                                                        |
+|---------------------|-----------------------------------------------------------------------------------|
+| `POSTGRES_PASSWORD` | Password for the Postgres container                                               |
+| `POSTGRES_DB`       | Database name (e.g. `tasks`)                                                      |
+| `DATABASE_URL`      | Used only when running uvicorn outside Docker; Compose overrides it with the `db` host |
+| `SUPABASE_URL`      | Your Supabase Project URL                                                         |
+| `SUPABASE_KEY`      | Your Supabase **anon** key                                                        |
+
+`.env` is git-ignored and listed in `.dockerignore`, so your keys never reach GitHub or the image.
+
+## Run it (one command)
+
 ```powershell
-Copy-Item .env.example .env then docker compose up
+docker compose up --build
 ```
 
-## Endpoints
+The API is at `http://localhost:8000` and Swagger UI is at `http://localhost:8000/docs`. To reset the task database, run `docker compose down -v`.
+
+## Auth endpoints
+
+| Method | Path                  | Auth required | Body                    | Success                             | Errors                                     |
+|--------|-----------------------|---------------|-------------------------|-------------------------------------|--------------------------------------------|
+| POST   | `/auth/signup`        | No            | `{"email", "password"}` | 201 + Supabase user                 | 400 missing field / rejected by Supabase   |
+| POST   | `/auth/login`         | No            | `{"email", "password"}` | 200 + `access_token`, `refresh_token` | 400 missing field, 401 wrong credentials |
+| POST   | `/auth/logout`        | **Bearer**    | —                       | 204, no body                        | 401 missing / invalid / expired token      |
+| GET    | `/protected/profile`  | **Bearer**    | —                       | 200 + `id`, `email`, `created_at`   | 401 missing / invalid / expired token      |
+| GET    | `/protected/dashboard`| **Bearer**    | —                       | 200 + greeting                      | 401 missing / invalid / expired token      |
+| GET    | `/public/info`        | No            | —                       | 200 + public message                | —                                          |
+
+Every error is JSON in the form `{"error": "..."}`. A missing, malformed (not `Bearer <token>`) or empty token returns `Access token required`. A token Supabase rejects returns `Invalid or expired token`.
+
+## Task endpoints (no auth)
 
 | Method | Path          | Description                        | Success | Errors                                  |
 |--------|---------------|------------------------------------|---------|-----------------------------------------|
@@ -26,37 +66,40 @@ Copy-Item .env.example .env then docker compose up
 
 Values of the wrong type (e.g. `"done": "yes"`) are rejected by FastAPI with 422.
 
+## Try the full flow with curl
 
-## Example request
+In Windows PowerShell, use `curl.exe` (plain `curl` is an alias for `Invoke-WebRequest`). Use any email address you like.
+
 ```powershell
-Invoke-RestMethod -Uri "http://localhost:8000/tasks" -Method Post -Headers @{"Content-Type"="application/json"} -Body '{"title":"Do the dishes"}'
-```
+# 1. Sign up -> 201
+curl.exe -i -X POST http://localhost:8000/auth/signup -H "Content-Type: application/json" -d '{\"email\":\"you@example.com\",\"password\":\"password123\"}'
 
-```
-id title          done
--- -----          ----
-4  Do the dishes  False
-```
+# 2. Log in -> 200, copy the access_token from the response
+curl.exe -i -X POST http://localhost:8000/auth/login -H "Content-Type: application/json" -d '{\"email\":\"you@example.com\",\"password\":\"password123\"}'
 
-## .env variables
-```
-POSTGRES_PASSWORD=yourpassword
-POSTGRES_DB=tasks
-DATABASE_URL=postgresql://postgres:yourpassword@localhost:5432/tasks
-```
+# 3. Protected route with the token -> 200
+curl.exe -i http://localhost:8000/protected/profile -H "Authorization: Bearer <ACCESS_TOKEN>"
 
+# 4. Change one character of the token -> 401 {"error":"Invalid or expired token"}
+# 5. No token at all -> 401 {"error":"Access token required"}
+curl.exe -i http://localhost:8000/protected/profile
+
+# 6. Log out -> 204
+curl.exe -i -X POST http://localhost:8000/auth/logout -H "Authorization: Bearer <ACCESS_TOKEN>"
+```
 
 ## Swagger UI
 
-![Swagger UI showing all task endpoints](screenshots/07-swagger-endpoints.png)
+Open `http://localhost:8000/docs`. The protected routes show a padlock. Click **Authorize**, paste the `access_token` from `POST /auth/login`, then use **Try it out** on `GET /protected/profile`.
 
-## Docker run command
+![Swagger UI with the Authorize padlock on protected routes](screenshots/09-swagger-auth.png)
 
-```powershell
- docker run --name taskdb -e POSTGRES_PASSWORD=yourpassword -e POSTGRES_DB=tasks -p 5432:5432 -v taskdata:/var/lib/postgresql/data -d postgres:17
- ```
+## Project layout
 
- ## run this to reset database
- ```powershell
- docker compose down -v
- ```
+| File                 | Role                                                                                       |
+|----------------------|--------------------------------------------------------------------------------------------|
+| `main.py`            | FastAPI app, request models and routes                                                     |
+| `auth.py`            | The auth guard: `HTTPBearer` scheme, `get_bearer_token` and `get_current_user` dependencies |
+| `repository.py`      | Postgres task queries and Supabase Auth calls (sign up, log in, verify token, log out)     |
+| `supabase_client.py` | Creates the Supabase client from `SUPABASE_URL` / `SUPABASE_KEY`                           |
+| `compose.yaml`       | `api` + `db` (Postgres 17) services                                                        |

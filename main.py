@@ -42,7 +42,11 @@ def unauthorized_handler(request: Request, exc: Unauthorized):
 
 @app.get("/", summary="API info", description="Describes this API and its endpoints.")
 def root():
-    return {"name": "Task API", "version": "1.0", "endpoints": ["/tasks"]}
+    return {
+        "name": "Task API",
+        "version": "1.0",
+        "endpoints": ["/tasks", "/auth/signup", "/auth/login", "/auth/logout", "/public/info", "/protected/profile", "/protected/dashboard"],
+    }
 
 
 @app.get("/health", summary="Health check", description="Confirms the server is alive.")
