@@ -5,3 +5,5 @@ tasks.db
 /docs
 CLAUDE.md
 .env
+/.agents
+skills-lock.json
