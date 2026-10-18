@@ -28,8 +28,22 @@ class TaskUpdate(BaseModel):
     title: str | None = None
     done: bool | None = None
 
+class UserSignup(BaseModel):
+    email: str = ""
+    password: str = ""
 
 repository.init_db()
+
+
+def extract_bearer_token(authorization: str | None) -> str | None:
+    if not authorization:
+        return None
+    scheme, _, token = authorization.partition(" ")
+    token = token.strip()
+    if scheme.lower() != "bearer" or not token:
+        return None
+    return token
+
 
 @app.get("/", summary="API info", description="Describes this API and its endpoints.")
 def root():
@@ -82,3 +96,44 @@ def update_task(task_id: int, body: TaskUpdate):
 )
 def delete_task(task_id: int):
     return repository.delete_task(task_id)
+
+
+@app.post(
+    "/auth/signup",
+    status_code=201,
+    summary="Sign up a new user",
+    description="Creates a new user account. Returns 400 if the email or password is missing.",
+)
+def user_signup(body: UserSignup):
+    return repository.create_user(body.email, body.password)
+
+@app.post(
+    "/auth/login",
+    status_code=200,
+    summary="Log in a user",
+    description="Logs in a user and returns an access token. Returns 400 if the email or password is missing.",
+)
+def user_login(body: UserSignup):
+    return repository.login_user(body.email, body.password)
+
+@app.get(
+    "/public/info",
+    status_code=200,
+    summary="Public info",
+    description="Returns public information about the API.",
+)
+def public_info():
+    return JSONResponse(status_code=200, content={"message": "Welcome stranger! This info is public."})
+
+@app.get(
+    "/protected/profile",
+    summary="Protected profile",
+    description="Requires 'Authorization: Bearer <token>'. Returns 401 if the token is missing or malformed.",
+)
+def protected_profile(authorization: str | None = Header(default=None)):
+    token = extract_bearer_token(authorization)
+    if token is None:
+        return JSONResponse(status_code=401, content={"error": "Access token required"})
+
+    return {"message": "access token received (not verified yet)."}
+    
